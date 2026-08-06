@@ -143,3 +143,5 @@ python3 export_tfjs.py
 - Re-training after adding songs is required for changes to affect predictions.
 - Keep dataset quality high; noisy chord annotations degrade generation quality.
 - Commit new `music_data/*.json` files only when they are valid and intentional.
+
+## Developed by Kaíque Freire
