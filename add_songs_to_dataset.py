@@ -516,20 +516,6 @@ NEW_SONGS = [
     },
 ]
 
-REAL_SONG_VARIANTS = [
-    "Original Session",
-    "Live Session",
-    "Acoustic Session",
-    "Piano Session",
-    "Orchestral Session",
-    "Studio Session",
-    "Extended Session",
-    "Instrumental Session",
-    "Reprise Session",
-    "Unplugged Session",
-]
-
-
 def load_existing_dataset_songs() -> list[dict]:
     songs = []
     for path in sorted(DATA_DIR.glob("*.json")):
@@ -541,60 +527,59 @@ def load_existing_dataset_songs() -> list[dict]:
         title = payload.get("title")
         tonality = payload.get("originalTonality")
         progression = payload.get("normalizedProgression")
-        if not title or not tonality or not isinstance(progression, list) or not progression:
+        artist = payload.get("artist")
+        if not title or not tonality or not artist or not isinstance(progression, list) or not progression:
             continue
 
         song = {
             "title": title,
+            "artist": artist,
             "originalTonality": tonality,
             "normalizedProgression": progression,
         }
-        artist = payload.get("artist")
-        if artist:
-            song["artist"] = artist
         songs.append(song)
     return songs
 
 
-def build_large_song_batch(target_total: int = 2000) -> list[dict]:
-    if target_total <= len(NEW_SONGS):
-        return []
+def build_real_songs_from_new_artists() -> list[dict]:
+    existing_artists = {
+        song["artist"].strip().lower()
+        for song in NEW_SONGS
+        if song.get("artist")
+    }
+    existing_song_keys = {
+        (
+            song["title"].strip().lower(),
+            song["artist"].strip().lower(),
+        )
+        for song in NEW_SONGS
+        if song.get("artist")
+    }
 
-    real_catalog = []
-    seen_titles = set()
-    for song in [*NEW_SONGS, *load_existing_dataset_songs()]:
-        title_key = song["title"].strip().lower()
-        if title_key in seen_titles:
+    additions = []
+    seen_addition_keys = set()
+    for song in load_existing_dataset_songs():
+        artist_key = song["artist"].strip().lower()
+        song_key = (song["title"].strip().lower(), artist_key)
+        if artist_key in existing_artists:
             continue
-        seen_titles.add(title_key)
-        real_catalog.append(song)
+        if song_key in existing_song_keys or song_key in seen_addition_keys:
+            continue
+        seen_addition_keys.add(song_key)
+        additions.append(
+            {
+                "title": song["title"],
+                "artist": song["artist"],
+                "originalTonality": song["originalTonality"],
+                "normalizedProgression": list(song["normalizedProgression"]),
+            }
+        )
 
-    if not real_catalog:
-        return []
-
-    generated_songs = []
-    total_to_generate = target_total - len(NEW_SONGS)
-
-    for index in range(total_to_generate):
-        base_song = real_catalog[index % len(real_catalog)]
-        cycle = (index // len(real_catalog)) + 1
-        variant = REAL_SONG_VARIANTS[index % len(REAL_SONG_VARIANTS)]
-
-        expanded_song = {
-            "title": f"{base_song['title']} - {variant} {cycle:02d}",
-            "originalTonality": base_song["originalTonality"],
-            "normalizedProgression": list(base_song["normalizedProgression"]),
-        }
-        artist = base_song.get("artist")
-        if artist:
-            expanded_song["artist"] = artist
-
-        generated_songs.append(expanded_song)
-
-    return generated_songs
+    return additions
 
 
-NEW_SONGS.extend(build_large_song_batch(2000))
+NEW_SONGS = [song for song in NEW_SONGS if song.get("artist")]
+NEW_SONGS.extend(build_real_songs_from_new_artists())
 
 
 def slugify_title(title: str) -> str:
