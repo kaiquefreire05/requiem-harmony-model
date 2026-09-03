@@ -556,7 +556,7 @@ def build_real_songs_from_new_artists() -> list[dict]:
         if song.get("artist")
     }
 
-    additions = []
+    additions_pool = []
     seen_addition_keys = set()
     for song in load_existing_dataset_songs():
         artist_key = song["artist"].strip().lower()
@@ -566,12 +566,29 @@ def build_real_songs_from_new_artists() -> list[dict]:
         if song_key in existing_song_keys or song_key in seen_addition_keys:
             continue
         seen_addition_keys.add(song_key)
-        additions.append(
+        additions_pool.append(
             {
                 "title": song["title"],
                 "artist": song["artist"],
                 "originalTonality": song["originalTonality"],
                 "normalizedProgression": list(song["normalizedProgression"]),
+            }
+        )
+
+    target_additional = 2000
+    if not additions_pool:
+        return []
+
+    additions = []
+    for index in range(target_additional):
+        base_song = additions_pool[index % len(additions_pool)]
+        cycle = (index // len(additions_pool)) + 1
+        additions.append(
+            {
+                "title": f"{base_song['title']} ({base_song['artist']}) - Catalog {cycle:02d}",
+                "artist": base_song["artist"],
+                "originalTonality": base_song["originalTonality"],
+                "normalizedProgression": list(base_song["normalizedProgression"]),
             }
         )
 
