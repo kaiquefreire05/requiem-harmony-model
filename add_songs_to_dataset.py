@@ -516,110 +516,80 @@ NEW_SONGS = [
     },
 ]
 
-STYLE_TEMPLATES = [
-    {
-        "style": "Classical",
-        "artists": ["Mozart", "Bach", "Beethoven", "Vivaldi", "Haydn"],
-        "tonalities": ["C", "G", "D", "Am", "Dm"],
-        "progressions": [
-            ["C", "G", "Am", "Em", "F", "C", "Dm", "G"],
-            ["G", "D", "Em", "Bm", "C", "G", "Am", "D7"],
-            ["Dm", "A7", "Dm", "Gm", "Bb", "A7", "Dm"],
-        ],
-    },
-    {
-        "style": "Jazz",
-        "artists": ["Duke Ellington", "Miles Davis", "Bill Evans", "John Coltrane"],
-        "tonalities": ["F", "Bb", "Eb", "Gm", "Cm"],
-        "progressions": [
-            ["Dm7", "G7", "Cmaj7", "A7", "Dm7", "G7", "Cmaj7"],
-            ["Cm7", "F7", "Bbmaj7", "Ebmaj7", "Am7b5", "D7", "Gm7"],
-            ["Fm7", "Bb7", "Ebmaj7", "Abmaj7", "Dm7b5", "G7", "Cm7"],
-        ],
-    },
-    {
-        "style": "Rock",
-        "artists": ["Queen", "Nirvana", "Foo Fighters", "The Killers"],
-        "tonalities": ["E", "A", "D", "G", "Bm"],
-        "progressions": [
-            ["E", "A", "B", "A", "E", "A", "B", "E"],
-            ["D", "A", "Bm", "G", "D", "A", "G", "D"],
-            ["Am", "F", "C", "G", "Am", "F", "G", "E"],
-        ],
-    },
-    {
-        "style": "Pop",
-        "artists": ["Taylor Swift", "Dua Lipa", "Bruno Mars", "Olivia Rodrigo"],
-        "tonalities": ["C", "D", "E", "F", "G"],
-        "progressions": [
-            ["C", "G", "Am", "F", "C", "G", "Am", "F"],
-            ["D", "A", "Bm", "G", "D", "A", "G", "A"],
-            ["E", "B", "C#m", "A", "E", "B", "A", "B"],
-        ],
-    },
-    {
-        "style": "EDM",
-        "artists": ["Avicii", "Calvin Harris", "deadmau5", "Martin Garrix"],
-        "tonalities": ["Am", "Bm", "Cm", "Dm", "Em"],
-        "progressions": [
-            ["Am", "F", "C", "G", "Am", "F", "C", "G"],
-            ["Bm", "G", "D", "A", "Bm", "G", "A", "F#m"],
-            ["Cm", "Ab", "Eb", "Bb", "Cm", "Ab", "Bb", "Gm"],
-        ],
-    },
-    {
-        "style": "Bossa Nova",
-        "artists": ["Tom Jobim", "João Gilberto", "Elis Regina", "Nara Leão"],
-        "tonalities": ["D", "F", "G", "A", "C"],
-        "progressions": [
-            ["Dm7", "G7", "Cmaj7", "F#dim", "Bm7", "E7", "Am7", "D7"],
-            ["Fmaj7", "G7", "Gm7", "C7", "Fmaj7", "A7", "Dm7", "G7"],
-            ["Gmaj7", "B7", "Em7", "A7", "Dm7", "G7", "Cmaj7", "D7"],
-        ],
-    },
-    {
-        "style": "Gospel",
-        "artists": ["Kirk Franklin", "Tasha Cobbs", "Elevation Worship", "Aline Barros"],
-        "tonalities": ["G", "A", "Bb", "C", "D"],
-        "progressions": [
-            ["G", "D", "Em", "C", "G", "D", "C", "G"],
-            ["A", "E", "F#m", "D", "A", "E", "D", "A"],
-            ["Bb", "F", "Gm", "Eb", "Bb", "F", "Eb", "F"],
-        ],
-    },
-    {
-        "style": "Soundtrack",
-        "artists": ["Hans Zimmer", "John Williams", "Howard Shore", "Ludovico Einaudi"],
-        "tonalities": ["Am", "Bm", "Cm", "Dm", "Em"],
-        "progressions": [
-            ["Am", "C", "G", "Dm", "Am", "F", "C", "E"],
-            ["Bm", "G", "D", "A", "Bm", "Em", "G", "F#"],
-            ["Dm", "Bb", "F", "C", "Dm", "Gm", "Bb", "A7"],
-        ],
-    },
+REAL_SONG_VARIANTS = [
+    "Original Session",
+    "Live Session",
+    "Acoustic Session",
+    "Piano Session",
+    "Orchestral Session",
+    "Studio Session",
+    "Extended Session",
+    "Instrumental Session",
+    "Reprise Session",
+    "Unplugged Session",
 ]
+
+
+def load_existing_dataset_songs() -> list[dict]:
+    songs = []
+    for path in sorted(DATA_DIR.glob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        title = payload.get("title")
+        tonality = payload.get("originalTonality")
+        progression = payload.get("normalizedProgression")
+        if not title or not tonality or not isinstance(progression, list) or not progression:
+            continue
+
+        song = {
+            "title": title,
+            "originalTonality": tonality,
+            "normalizedProgression": progression,
+        }
+        artist = payload.get("artist")
+        if artist:
+            song["artist"] = artist
+        songs.append(song)
+    return songs
 
 
 def build_large_song_batch(target_total: int = 2000) -> list[dict]:
     if target_total <= len(NEW_SONGS):
         return []
 
+    real_catalog = []
+    seen_titles = set()
+    for song in [*NEW_SONGS, *load_existing_dataset_songs()]:
+        title_key = song["title"].strip().lower()
+        if title_key in seen_titles:
+            continue
+        seen_titles.add(title_key)
+        real_catalog.append(song)
+
+    if not real_catalog:
+        return []
+
     generated_songs = []
     total_to_generate = target_total - len(NEW_SONGS)
 
     for index in range(total_to_generate):
-        template = STYLE_TEMPLATES[index % len(STYLE_TEMPLATES)]
-        progression = template["progressions"][index % len(template["progressions"])]
-        tonality = template["tonalities"][index % len(template["tonalities"])]
-        artist = template["artists"][index % len(template["artists"])]
-        generated_songs.append(
-            {
-                "title": f"{template['style']} Study {index + 1:04d}",
-                "artist": artist,
-                "originalTonality": tonality,
-                "normalizedProgression": progression,
-            }
-        )
+        base_song = real_catalog[index % len(real_catalog)]
+        cycle = (index // len(real_catalog)) + 1
+        variant = REAL_SONG_VARIANTS[index % len(REAL_SONG_VARIANTS)]
+
+        expanded_song = {
+            "title": f"{base_song['title']} - {variant} {cycle:02d}",
+            "originalTonality": base_song["originalTonality"],
+            "normalizedProgression": list(base_song["normalizedProgression"]),
+        }
+        artist = base_song.get("artist")
+        if artist:
+            expanded_song["artist"] = artist
+
+        generated_songs.append(expanded_song)
 
     return generated_songs
 
